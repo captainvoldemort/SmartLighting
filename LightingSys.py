@@ -3,8 +3,10 @@ import cv2
 import os
 
 #defining paths
-image_path = 'C:\\Users\\yasht\\OneDrive\\Desktop\\SmartLighting\\image1.jpg'
+image_path = 'C:\\Users\\yasht\\OneDrive\\Desktop\\SmartLighting\\Images\\image1.jpg'
 save_location = "C:\\Users\\yasht\\OneDrive\\Desktop\\SmartLighting\\Images"
+#time interval specified to capture image - 10 seconds
+capture_interval = 10 
 
 #capture image function
 def capture_image():
@@ -30,8 +32,7 @@ def detect_humans():
     hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
 
     # detect humans in input image
-    (humans, _) = hog.detectMultiScale(image, winStride=(10, 10),
-    padding=(32, 32), scale=1.1)
+    (humans, _) = hog.detectMultiScale(image, winStride=(10, 10),padding=(32, 32), scale=1.1)
 
     # getting no. of human detected
     print('Human Detected : ', len(humans))
@@ -62,6 +63,11 @@ def count_faces():
     print('Faces Detected : ', len(faces))
     # Return the number of faces found
     return len(faces)
-capture_image()
-detect_humans()
-count_faces()
+
+
+while True:
+    capture_image()
+    detect_humans()
+    count_faces()
+    # Wait for the specified interval
+    cv2.waitKey(capture_interval * 1000)
