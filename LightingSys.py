@@ -1,73 +1,91 @@
-# import required libraries
+# Import required libraries
 import cv2
 import os
+import RPi.GPIO as GPIO
+import time
 
-#defining paths
-image_path = 'C:\\Users\\yasht\\OneDrive\\Desktop\\SmartLighting\\Images\\image1.jpg'
-save_location = "C:\\Users\\yasht\\OneDrive\\Desktop\\SmartLighting\\Images"
-#time interval specified to capture image - 10 seconds
-capture_interval = 10 
+# Set up Raspberry Pi GPIO
+GPIO.setmode(GPIO.BOARD)
 
-#capture image function
+# Define PIR and relay pins
+pir_pin = 18
+relay_pin = 36
+
+# Set up GPIO pins for input and output
+GPIO.setup(pir_pin, GPIO.IN)
+GPIO.setup(relay_pin, GPIO.OUT)
+
+# Define image paths and capture interval
+image_path = './CAPTURED_IMAGES/image_cache.jpg'
+save_location = "./CAPTURED_IMAGES"
+capture_interval = 10  # seconds
+
+# Capture image function
 def capture_image():
-    # Open the default camera
-    cap = cv2.VideoCapture(0)
-
-    # Capture a frame
-    ret, frame = cap.read()
-
-    # Release the camera
-    cap.release()
-
-    # Save the image as "image1.jpg" in the specified location
-    save_path = os.path.join(save_location, "image1.jpg")
-    cv2.imwrite(save_path, frame)
+    cap = cv2.VideoCapture(0)  # Open the default camera
+    ret, frame = cap.read()    # Capture a frame
+    cap.release()              # Release the camera
+    save_path = os.path.join(save_location, "image_cache.jpg")
+    cv2.imwrite(save_path, frame)  # Save the image
 
 def detect_humans():
-    # Reading the Image
-    image = cv2.imread(image_path)
-
-    # initialize the HOG descriptor
-    hog = cv2.HOGDescriptor()
+    image = cv2.imread(image_path)  # Read the image
+    hog = cv2.HOGDescriptor()       # Initialize the HOG descriptor
     hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-
-    # detect humans in input image
-    (humans, _) = hog.detectMultiScale(image, winStride=(10, 10),padding=(32, 32), scale=1.1)
-
-    # getting no. of human detected
-    print('Human Detected : ', len(humans))
-
+    (humans, _) = hog.detectMultiScale(image, winStride=(10, 10), padding=(32, 32), scale=1.1)
+    print('Human Detected:', len(humans))
     return len(humans)
-    # # loop over all detected humans
-    # for (x, y, w, h) in humans:
-    #    pad_w, pad_h = int(0.15 * w), int(0.01 * h)
-    #    cv2.rectangle(image, (x + pad_w, y + pad_h), (x + w - pad_w, y + h - pad_h), (0, 255, 0), 2)
-
-    # # display the output image
-    # cv2.imshow("Image", image)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
 
 def count_faces():
-    # Load the input image
-    image = cv2.imread(image_path)
-
-    # Convert the image to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Load the face detector (Haar cascades)
-    face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
-
-    # Detect faces in the grayscale image
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
-    print('Faces Detected : ', len(faces))
-    # Return the number of faces found
+    image = cv2.imread(image_path)  # Load the input image
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
+    face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')  # Load the face detector
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)  # Detect faces
+    print('Faces Detected:', len(faces))
     return len(faces)
 
+def pir():
+    try:
+        while True:
+            if GPIO.input(pir_pin):
+                motion_state = True
+                print('Motion Detected')
+                return motion_state
+    except KeyboardInterrupt:
+        GPIO.cleanup()
 
 while True:
-    capture_image()
-    detect_humans()
-    count_faces()
-    # Wait for the specified interval
-    cv2.waitKey(capture_interval * 1000)
+    is_motion = False
+    light_state = 'OFF'
+    is_motion = pir()
+    
+    if is_motion:
+        GPIO.output(relay_pin, True)  # Turn on lights
+        light_state = 'ON'
+    else:
+        GPIO.output(relay_pin, False)  # Turn off lights
+        light_state = 'OFF'
+    
+    '''
+    Algorithm:
+    1. Check for Motion using PIR
+    2. If motion == True, turn on lights and set light_state to 'ON'
+    3. Otherwise, continue monitoring
+    4. If light_state == 'ON', perform the following checks:
+        a. Capture an image
+        b. Detect the number of humans using HOG
+        c. Detect the number of faces using Haar cascades
+        d. Wait for the specified interval
+        e. If no humans and no faces are detected:
+    - Turn off lights
+        #- Update light_state to 'OFF' (Optional: As it's already OFF)
+    '''
+    while light_state == 'ON':
+        capture_image()
+        num_humans = detect_humans()
+        num_faces = count_faces()
+        cv2.waitKey(capture_interval * 1000)  # Wait for the specified interval
+        
+        if num_faces == 0 and num_humans == 0:
+            GPIO.output(relay_pin, False)  # Turn off lights
+            #light_state = 'OFF'
